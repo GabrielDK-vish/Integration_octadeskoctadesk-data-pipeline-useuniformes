@@ -1,0 +1,8 @@
+pandas==2.2.2
+requests==2.31.0
+python-dotenv>=0.21.0
+pytz==2024.1
+google-cloud-bigquery==3.6.0
+google-auth==2.14.0
+typing-extensions>=4.0.0
+
