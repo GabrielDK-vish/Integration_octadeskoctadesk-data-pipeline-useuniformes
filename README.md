@@ -64,3 +64,11 @@ A centralização desses dados permite que a Use Uniformes SP:
 ---
 
 **Desenvolvido com foco em confiabilidade, rastreabilidade e integração com o ecossistema GCP.**
+
+## 📬 Contato
+
+Desenvolvido por [Seu Nome].
+
+- Email: ggbriel2k22@gmail.com
+- LinkedIn: [Gabriel Ramos](https://www.linkedin.com/in/gabriel-ramos-401786356)
+
