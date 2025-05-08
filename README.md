@@ -21,6 +21,7 @@ A solução é executada em uma máquina virtual com **Apache Airflow**, e reali
 ├── config.py           # Carrega variáveis do .env
 ├── config.json         # Credenciais da conta de serviço GCP (não versionado)
 ├── .env                # Chaves de API da Octadesk (não versionado)
+├── manutencao.py       # Verifica duplicidade de registro acessando tabela de destino.
 └── requirements.txt    # Dependências do projeto
 ```
 
