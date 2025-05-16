@@ -1,25 +1,15 @@
 import requests 
-import pandas as pd 
-from requests.exceptions import HTTPError  
+import json
+import pandas as pd
+from google.cloud import bigquery
 from time import sleep  
 from datetime import datetime, timedelta 
 from typing import List, Tuple
-from config import OCTA_BASE_URL, OCTA_API_KEY, OCTA_AGENT_EMAIL
-
-# monte seus globais a partir delas
-octa_base_url = OCTA_BASE_URL
-octa_headers = {
-    "Content-Type":      "application/json",
-    "Accept":            "application/json",
-    "x-api-key":         OCTA_API_KEY,
-    "octa-agent-email":  OCTA_AGENT_EMAIL,
-}
-
-
+from config import OCTA_BASE_URL, OCTA_HEADERS, BQ, SRC_TABLE_SAC_OCTADESK, TIMEZONE
 
 def fetch_octadesk_tickets(params: dict) -> pd.DataFrame:
-    url  = f"{octa_base_url}/tickets"
-    resp = requests.get(url, headers=octa_headers, params=params)
+    url  = f"{OCTA_BASE_URL}/tickets"
+    resp = requests.get(url, headers=OCTA_HEADERS, params=params)
     if resp.status_code != 200:
         print(f"Erro status: {resp.status_code}\n{resp.text}")
         resp.raise_for_status()
@@ -131,8 +121,8 @@ def fetch_all_tickets(start_dt: datetime, end_dt: datetime,
 
         # Retry em caso de 409/500 ou outros HTTPError
         for attempt in range(1, max_retries + 1):
-            resp = requests.get(f"{octa_base_url}/tickets",
-                                headers=octa_headers,
+            resp = requests.get(f"{OCTA_BASE_URL}/tickets",
+                                headers=OCTA_HEADERS,
                                 params=params)
             print(f"Tentativa {attempt} — status {resp.status_code}")  # ajuda no debug
             if resp.status_code in (409, 500):
@@ -157,3 +147,66 @@ def fetch_all_tickets(start_dt: datetime, end_dt: datetime,
         page += 1
 
     return pd.json_normalize(all_tickets)
+
+def update_ticket_status_by_ticket_id(ticket_id: str) -> str:
+    try:
+        # 1. Busca dados do ticket na API Octadesk
+        resp = requests.get(f"{OCTA_BASE_URL}/tickets/{ticket_id}", headers=OCTA_HEADERS)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # 2. Extrai campos customizados e status
+        custom = {item["key"]: item["value"] for item in data.get("customField", [])}
+        tipo_produto   = custom.get("produto")
+        n_pedido       = custom.get("n_do_pedido")
+        n_pedido_bling = custom.get("n_do_pedido_bling")
+        tags_list      = data.get("tags", [])  # Lista de strings do Python
+        cpf            = custom.get("cpf")
+        status1        = data.get("status", {}).get("name")
+        status2        = (
+            data.get("lastHumanInteraction", {})
+                .get("propertiesChanges", {})
+                .get("status")
+        )
+
+        # 3. Monta a query usando parâmetro de array
+        sql = f"""
+        UPDATE `{SRC_TABLE_SAC_OCTADESK}`
+        SET
+          ticket_produto           = @tipo_produto,
+          ticket_n_do_pedido       = @n_pedido,
+          ticket_n_do_pedido_bling = @n_pedido_bling,
+          tags                     = @tags,
+          ticket_cpf               = @cpf,
+          status_ticket            = @status1,
+          status_ticket2           = @status2
+        WHERE n_ticket = @ticket_id
+        """
+
+        # 4. Prepara parâmetros, incluindo ArrayQueryParameter para tags
+        job_config = bigquery.QueryJobConfig(
+            query_parameters=[
+                bigquery.ScalarQueryParameter("tipo_produto", "STRING", tipo_produto),
+                bigquery.ScalarQueryParameter("n_pedido", "STRING", n_pedido),
+                bigquery.ScalarQueryParameter("n_pedido_bling", "STRING", n_pedido_bling),
+                bigquery.ArrayQueryParameter("tags", "STRING", tags_list),
+                bigquery.ScalarQueryParameter("cpf", "STRING", cpf),
+                bigquery.ScalarQueryParameter("status1", "STRING", status1),
+                bigquery.ScalarQueryParameter("status2", "STRING", status2),
+                bigquery.ScalarQueryParameter("ticket_id", "STRING", ticket_id),
+            ]
+        )  # :contentReference[oaicite:2]{index=2}
+
+        # 5. Executa a query e aguarda a conclusão
+        query_job = BQ.query(sql, job_config=job_config)
+        query_job.result()
+
+        # 6. Retorna confirmação com timestamp
+        date = datetime.now(TIMEZONE)
+        return f"Update realizado com sucesso para o ticket {ticket_id} - {date}"
+
+    except requests.RequestException as e:
+        return f"Erro na requisição à API Octadesk: {e}"
+    except Exception as e:
+        # Captura erros do BigQuery, incluindo tipo de parâmetro incorreto
+        return f"Erro ao atualizar ticket {ticket_id}: {e}"
