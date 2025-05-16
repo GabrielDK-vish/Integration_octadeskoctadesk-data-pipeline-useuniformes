@@ -1,6 +1,6 @@
 # Octadesk Data Pipeline - Use Uniformes SP
 
-Este projeto implementa uma pipeline automatizada de coleta, transformação e carregamento de dados (ETL) a partir da plataforma **Octadesk**, com destino ao **Google BigQuery**, para uso analítico e organizacional pela **Use Uniformes SP**.
+Este projeto implementa uma pipeline automatizada de coleta, transformação e carregamento de dados (ETL) a partir da plataforma **Octadesk**, com destino ao **Google BigQuery**, para uso analítico e organizacional pela **Use Uniformes SP**, após subir os registros com exceção de duplicadas ele faz atualização verificando o andamento de processos de tickets e atualizando-os diretamente no GCP.
 
 ## 🚀 Visão Geral
 
